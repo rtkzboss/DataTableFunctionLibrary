@@ -1,31 +1,39 @@
 #include "RTKZ_DataTableFunctionLibrary.h"
-#include "Misc/RuntimeErrors.h"
+#include "Blueprint/BlueprintSupport.h"
 
 #define LOCTEXT_NAMESPACE "RTKZ_DataTableFunctionLibrary"
 
+const FName TableInvalidWarning = FName("RTKZ_TableInvalidWarning");
+const FName ParentTableInvalidWarning = FName("RTKZ_ParentTableInvalidWarning");
+const FName RowStructsIncompatibleWarning = FName("RTKZ_RowStructsIncompatibleWarning");
+
+static bool RowTypeCompatibleWithTable(UScriptStruct const* InputType, UScriptStruct const* TableType) {
+	return InputType == TableType || InputType->IsChildOf(TableType) && FStructUtils::TheSameLayout(InputType, TableType);
+}
+
 URTKZ_DataTableFunctionLibrary::URTKZ_DataTableFunctionLibrary(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
+	FBlueprintSupport::RegisterBlueprintWarning(FBlueprintWarningDeclaration(TableInvalidWarning, LOCTEXT("TableInvalidWarning", "The table is invalid")));
+	FBlueprintSupport::RegisterBlueprintWarning(FBlueprintWarningDeclaration(ParentTableInvalidWarning, LOCTEXT("ParentTableInvalidWarning", "The parent table is invalid")));
+	FBlueprintSupport::RegisterBlueprintWarning(FBlueprintWarningDeclaration(RowStructsIncompatibleWarning, LOCTEXT("RowStructsIncompatibleWarning", "Incompatible row structs")));
 }
 
 void URTKZ_DataTableFunctionLibrary::AppendParentDataTables(UCompositeDataTable* DataTable, const TArray<UDataTable*>& NewTables)
 {
 	if (!DataTable) {
-		LogRuntimeError(LOCTEXT("AppendParentDataTables_InvalidTable", "AppendParentDataTables: The table is invalid."));
+		FFrame::KismetExecutionMessage(TEXT("The table is invalid."), ELogVerbosity::Warning, TableInvalidWarning);
 		return;
 	}
 	UScriptStruct const* TableType = DataTable->GetRowStruct();
 	for (UDataTable* ParentTable : NewTables)
 	{
 		if (!ParentTable) {
-			LogRuntimeError(LOCTEXT("AppendParentDataTables_InvalidParent", "AppendParentDataTables: The parent table is invalid."));
+			FFrame::KismetExecutionMessage(TEXT("The parent table is invalid."), ELogVerbosity::Warning, ParentTableInvalidWarning);
 			return;
 		}
 		UScriptStruct const* ParentTableType = ParentTable->GetRowStruct();
 		if (ParentTableType != TableType) {
-			FFormatNamedArguments Args;
-			Args.Add(TEXT("ParentTableType"), FText::AsCultureInvariant(GetPathNameSafe(ParentTableType)));
-			Args.Add(TEXT("TableType"), FText::AsCultureInvariant(GetPathNameSafe(TableType)));
-			LogRuntimeError(FText::Format(LOCTEXT("AppendParentDataTables_Incompatible", "AppendParentDataTables: The parent row struct {ParentTableType} is incompatible with the table row struct {TableType}."), Args));
+			FFrame::KismetExecutionMessage(*FString::Printf(TEXT("The parent row struct %s is incompatible with the table row struct %s."), *GetPathNameSafe(ParentTableType), *GetPathNameSafe(TableType)), ELogVerbosity::Warning, RowStructsIncompatibleWarning);
 			return;
 		}
 	}
@@ -35,7 +43,7 @@ void URTKZ_DataTableFunctionLibrary::AppendParentDataTables(UCompositeDataTable*
 void URTKZ_DataTableFunctionLibrary::RemoveDataTableRow(UDataTable* DataTable, FName RowName)
 {
 	if (!DataTable) {
-		LogRuntimeError(LOCTEXT("RemoveDataTableRow_InvalidTable", "RemoveDataTableRow: The table is invalid."));
+		FFrame::KismetExecutionMessage(TEXT("The table is invalid."), ELogVerbosity::Warning, TableInvalidWarning);
 		return;
 	}
 	DataTable->RemoveRow(RowName);
